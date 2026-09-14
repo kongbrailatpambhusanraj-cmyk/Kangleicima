@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Play, Info, Plus, Check } from "lucide-react";
@@ -35,6 +35,27 @@ export default function MovieCard({ movie }: MovieCardProps) {
   const partMatch = movie.title.match(/part\s*(\d+)/i);
   const partBadge = partMatch ? `Part ${partMatch[1]}` : null;
 
+  useEffect(() => {
+    let isMounted = true;
+    async function checkStatus() {
+      try {
+        const res = await fetch(`/api/movies/${movie.id}/mylist`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.inMyList !== undefined) {
+            setInList(Boolean(data.inMyList));
+          }
+        }
+      } catch {
+        // silent fail
+      }
+    }
+    checkStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, [movie.id]);
+
   const formatViews = (views?: bigint | number | null) => {
     if (!views) return null;
     const count = typeof views === "bigint" ? Number(views) : views;
@@ -53,11 +74,20 @@ export default function MovieCard({ movie }: MovieCardProps) {
     setInList(newState);
 
     try {
-      await fetch(`/api/movies/${movie.id}/mylist`, {
+      const res = await fetch(`/api/movies/${movie.id}/mylist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inMyList: newState }),
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.inMyList !== undefined) {
+          setInList(Boolean(data.inMyList));
+        }
+        router.refresh();
+      } else {
+        setInList(!newState);
+      }
     } catch {
       setInList(!newState);
     } finally {
@@ -129,7 +159,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
           )}
         </div>
 
-        {/* Tiny Bottom-Right Corner Action Buttons (Always visible or softly styled) */}
+        {/* Tiny Bottom-Right Corner Action Buttons */}
         <div className="absolute bottom-1.5 right-1.5 z-20 flex items-center gap-1">
           <button
             type="button"

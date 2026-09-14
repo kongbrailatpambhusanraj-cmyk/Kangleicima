@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { X, Play, Plus, Check, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from "react";
+import { X, Play, Plus, Check, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Movie {
   id: string;
@@ -42,7 +42,7 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
     if (movieId && isOpen) {
       setLoadingParts(true);
       setParts([]);
-      
+
       // Fetch movie details
       fetch(`/api/movies/${movieId}`)
         .then((res) => res.json())
@@ -53,7 +53,17 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
         .catch((err) => console.error("Error loading movie modal:", err))
         .finally(() => setLoadingParts(false));
 
-      // Fetch related parts / series siblings if available
+      // Check initial saved status
+      fetch(`/api/movies/${movieId}/mylist`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.inMyList !== undefined) {
+            setIsSaved(Boolean(data.inMyList));
+          }
+        })
+        .catch(() => {});
+
+      // Fetch related parts / series siblings
       fetch(`/api/movies/${movieId}/parts`)
         .then((res) => res.json())
         .then((data) => {
@@ -62,7 +72,6 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
           }
         })
         .catch(() => {
-          // Fallback if parts endpoint is structured differently
           setParts([]);
         });
     }
@@ -88,18 +97,20 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
   const handleWatchlistToggle = async () => {
     if (isTogglingList) return;
     setIsTogglingList(true);
+    const nextState = !isSaved;
     try {
       const res = await fetch(`/api/movies/${activeModalMovie.id}/mylist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inMyList: !isSaved }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inMyList: nextState }),
       });
       const data = await res.json();
       if (data.inMyList !== undefined) {
-        setIsSaved(data.inMyList);
+        setIsSaved(Boolean(data.inMyList));
       } else {
-        setIsSaved(!isSaved);
+        setIsSaved(nextState);
       }
+      router.refresh();
     } catch (err) {
       console.error("Watchlist toggle error:", err);
     } finally {
@@ -108,17 +119,17 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-zinc-950 border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl relative shadow-2xl scrollbar-hide"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
-        <button 
-          onClick={onClose} 
+        <button
+          onClick={onClose}
           className="absolute top-3 right-3 text-white z-20 p-2 bg-black/70 rounded-full hover:bg-black/90 transition border border-zinc-700"
           aria-label="Close modal"
         >
@@ -127,10 +138,10 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
 
         {/* Hero Preview Thumbnail */}
         <div className="aspect-[16/9] w-full relative bg-zinc-900">
-          <img 
-            src={activeModalMovie.thumbnail} 
-            alt={activeModalMovie.title} 
-            className="w-full h-full object-cover" 
+          <img
+            src={activeModalMovie.thumbnail}
+            alt={activeModalMovie.title}
+            className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
         </div>
@@ -142,23 +153,28 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
               {activeModalMovie.title}
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 mt-2 leading-relaxed">
-              {activeModalMovie.description || "Manipuri digital cinema performance catalog entry."}
+              {activeModalMovie.description ||
+                "Manipuri digital cinema performance catalog entry."}
             </p>
           </div>
 
           {/* Genres */}
           <div className="flex gap-1.5 flex-wrap">
-            {activeModalMovie.genres && activeModalMovie.genres.map((genre) => (
-              <span key={genre} className="bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-md text-xs text-zinc-300 font-medium">
-                {genre}
-              </span>
-            ))}
+            {activeModalMovie.genres &&
+              activeModalMovie.genres.map((genre) => (
+                <span
+                  key={genre}
+                  className="bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-md text-xs text-zinc-300 font-medium"
+                >
+                  {genre}
+                </span>
+              ))}
           </div>
 
           {/* Action Buttons */}
           <div className="pt-2 flex flex-wrap items-center gap-3">
-            <button 
-              onClick={handleModalPlay} 
+            <button
+              onClick={handleModalPlay}
               className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 text-xs sm:text-sm shadow-lg shadow-red-950 transition active:scale-95"
             >
               <Play fill="currentColor" size={15} /> Play Movie
@@ -169,7 +185,11 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
               disabled={isTogglingList}
               className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 px-4 py-2.5 rounded-lg font-semibold flex items-center gap-2 text-xs sm:text-sm transition active:scale-95"
             >
-              {isSaved ? <Check size={16} className="text-red-500" /> : <Plus size={16} />}
+              {isSaved ? (
+                <Check size={16} className="text-red-500" />
+              ) : (
+                <Plus size={16} />
+              )}
               <span>{isSaved ? "Saved to List" : "Add to List"}</span>
             </button>
           </div>
@@ -200,7 +220,9 @@ const MovieModal = ({ movieId, isOpen, onClose }: MovieModalProps) => {
                             : "bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700"
                         }`}
                       >
-                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        )}
                         <span>{p.displayBadge || `Part ${idx + 1}`}</span>
                       </button>
                     );

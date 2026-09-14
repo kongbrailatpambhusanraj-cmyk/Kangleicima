@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export async function createClient() {
-  // Next.js 16 requires awaiting cookies()
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -19,7 +18,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // Can be ignored if called from a Server Component during render
+            // Can be ignored if middleware is refreshing user sessions
           }
         },
       },

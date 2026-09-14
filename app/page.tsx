@@ -28,80 +28,93 @@ function shuffle<T>(array: T[]): T[] {
 }
 
 export default async function HomePage() {
+  // Base condition: Exclude non-playable / unavailable entries
   const baseFilter = {
     availabilityStatus: { not: "UNAVAILABLE" as const },
   };
 
-  // Run all 7 database queries concurrently
-  const [
-    heroMovie,
-    featuredFullFilms,
-    popularFilms,
-    discoveredPool,
-    recentlyAddedFilms,
-    sumangLeelaFilms,
-    allFilmsPool,
-  ] = await Promise.all([
-    // Hero Spotlight
-    prisma.movie.findFirst({
-      where: { ...baseFilter, isFeatured: true },
-      orderBy: { viewCount: "desc" },
-      select: { ...movieSelect, description: true },
-    }),
+  // Dedicated filters for Sumang Leela
+  const leelaCondition = {
+    OR: [
+      { genres: { has: "Sumang Leela" } },
+      { genres: { has: "Leela" } },
+      { title: { contains: "Leela", mode: "insensitive" as const } },
+    ],
+  };
 
-    // 1. Featured Full Films
-    prisma.movie.findMany({
-      where: { ...baseFilter, isFullMovie: true, isFeatured: true },
-      take: 30,
-      orderBy: { viewCount: "desc" },
-      select: movieSelect,
-    }),
+  // Movies must be full-length films and NOT Leela plays
+  const standardMovieFilter = {
+    ...baseFilter,
+    isFullMovie: true,
+    NOT: leelaCondition,
+  };
 
-    // 2. Popular Films (Highest Views)
-    prisma.movie.findMany({
-      where: baseFilter,
-      take: 30,
-      orderBy: { viewCount: "desc" },
-      select: movieSelect,
-    }),
+  // --- BATCH 1: Primary rows & Hero Spotlight (4 concurrent queries) ---
+  const [heroMovie, featuredFullFilms, popularFilms, sumangLeelaFilms] =
+    await Promise.all([
+      // Hero Spotlight
+      prisma.movie.findFirst({
+        where: { ...standardMovieFilter, isFeatured: true },
+        orderBy: { viewCount: "desc" },
+        select: { ...movieSelect, description: true },
+      }),
 
-    // 3. Discovered Films (Randomized pool)
-    prisma.movie.findMany({
-      where: { ...baseFilter, OR: [{ isDiscovered: true }, { isFullMovie: true }] },
-      take: 40,
-      select: movieSelect,
-    }),
+      // 1. Featured Full Films
+      prisma.movie.findMany({
+        where: { ...standardMovieFilter, isFeatured: true },
+        take: 24,
+        orderBy: { viewCount: "desc" },
+        select: movieSelect,
+      }),
 
-    // 4. Recently Added
-    prisma.movie.findMany({
-      where: baseFilter,
-      take: 30,
-      orderBy: { createdAt: "desc" },
-      select: movieSelect,
-    }),
+      // 2. Popular Films (Highest view counts among full films)
+      prisma.movie.findMany({
+        where: standardMovieFilter,
+        take: 24,
+        orderBy: { viewCount: "desc" },
+        select: movieSelect,
+      }),
 
-    // 5. Sumang Leela
-    prisma.movie.findMany({
-      where: {
-        ...baseFilter,
-        OR: [
-          { genres: { has: "Sumang Leela" } },
-          { genres: { has: "Leela" } },
-          { title: { contains: "Leela", mode: "insensitive" } },
-        ],
-      },
-      take: 30,
-      orderBy: { createdAt: "desc" },
-      select: movieSelect,
-    }),
+      // 3. Sumang Leela (Strictly theatrical/drama plays)
+      prisma.movie.findMany({
+        where: {
+          ...baseFilter,
+          ...leelaCondition,
+        },
+        take: 24,
+        orderBy: { createdAt: "desc" },
+        select: movieSelect,
+      }),
+    ]);
 
-    // 6. All Films (Randomized pool)
-    prisma.movie.findMany({
-      where: baseFilter,
-      take: 50,
-      select: movieSelect,
-    }),
-  ]);
+  // --- BATCH 2: Secondary & Discovered rows (3 concurrent queries) ---
+  const [discoveredPool, recentlyAddedFilms, allFilmsPool] =
+    await Promise.all([
+      // 4. Discovered Films (Freshly ingested full-length candidates)
+      prisma.movie.findMany({
+        where: {
+          ...standardMovieFilter,
+          isDiscovered: true,
+        },
+        take: 30,
+        select: movieSelect,
+      }),
+
+      // 5. Recently Added
+      prisma.movie.findMany({
+        where: standardMovieFilter,
+        take: 24,
+        orderBy: { createdAt: "desc" },
+        select: movieSelect,
+      }),
+
+      // 6. All Films Pool (Random pool for catalog diversity)
+      prisma.movie.findMany({
+        where: standardMovieFilter,
+        take: 36,
+        select: movieSelect,
+      }),
+    ]);
 
   const discoveredFilms = shuffle(discoveredPool);
   const allFilms = shuffle(allFilmsPool);

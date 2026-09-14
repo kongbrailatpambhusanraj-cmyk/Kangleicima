@@ -1,109 +1,124 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import { NextResponse, type NextRequest } from "next/server";
 
-// Helper: Safely resolve or link user & profile
-async function getOrCreateProfile(userId: string, userEmail?: string | null) {
-  let dbUser = null;
-
-  // 1. Match by email first (ensures Google OAuth maps to existing user records)
-  if (userEmail) {
-    dbUser = await prisma.user.findUnique({
-      where: { email: userEmail },
-    });
-  }
-
-  // 2. If not found by email, match by user ID
-  if (!dbUser && userId) {
-    dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-  }
-
-  // 3. Create user if absent
-  if (!dbUser) {
-    dbUser = await prisma.user.create({
-      data: {
-        id: userId,
-        email: userEmail || `${userId}@auth.supabase`,
-      },
-    });
-  }
-
-  // 4. Ensure user profile exists
-  let profile = await prisma.profile.findFirst({
-    where: { userId: dbUser.id },
-  });
-
-  if (!profile) {
-    profile = await prisma.profile.create({
-      data: {
-        userId: dbUser.id,
-        name: dbUser.email ? dbUser.email.split('@')[0] : 'Member',
-      },
-    });
-  }
-
-  return { dbUser, profile };
-}
-
-// GET: Retrieve watchlist
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
-  const userEmail = searchParams.get('email');
-
-  if (!userId && !userEmail) {
-    return NextResponse.json({ error: 'Missing user credentials', movies: [], movieIds: [] }, { status: 400 });
-  }
-
+// GET: Retrieve all watchlist movies for the current user
+export async function GET() {
   try {
-    const { profile } = await getOrCreateProfile(userId || '', userEmail);
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    const savedItems = await prisma.watchListItem.findMany({
-      where: { profileId: profile.id },
-      orderBy: { addedAt: 'desc' },
-    });
-
-    const movieIds = savedItems.map((item) => item.movieId);
-
-    if (movieIds.length === 0) {
-      return NextResponse.json({ movies: [], movieIds: [] });
+    if (!user || !user.email) {
+      return NextResponse.json({ items: [] }, { status: 401 });
     }
 
-    const movies = await prisma.movie.findMany({
-      where: { id: { in: movieIds } },
+    // Safely lookup the user by unique email
+    const dbUser = await prisma.user.findUnique({
+      where: { email: user.email },
     });
 
-    const sanitizedMovies = movies.map((m) => ({
-      ...m,
-      viewCount: m.viewCount ? m.viewCount.toString() : null,
-      inMyList: true,
-    }));
+    if (!dbUser) {
+      return NextResponse.json({ items: [] });
+    }
 
-    sanitizedMovies.sort((a, b) => movieIds.indexOf(a.id) - movieIds.indexOf(b.id));
+    const userProfile = await prisma.profile.findFirst({
+      where: { userId: dbUser.id },
+    });
 
-    return NextResponse.json({ movies: sanitizedMovies, movieIds });
-  } catch (err: any) {
-    console.error('Watchlist GET error:', err);
-    return NextResponse.json({ error: err.message || 'Database error', movies: [], movieIds: [] }, { status: 500 });
+    if (!userProfile) {
+      return NextResponse.json({ items: [] });
+    }
+
+    const watchListEntries = await prisma.watchListItem.findMany({
+      where: {
+        profileId: userProfile.id,
+      },
+      orderBy: {
+        addedAt: "desc",
+      },
+    });
+
+    const movieIds = watchListEntries.map((entry) => entry.movieId);
+
+    const movies =
+      movieIds.length > 0
+        ? await prisma.movie.findMany({
+            where: {
+              id: { in: movieIds },
+            },
+          })
+        : [];
+
+    const orderedMovies = movieIds
+      .map((id) => movies.find((m) => m.id === id))
+      .filter((m): m is NonNullable<typeof m> => Boolean(m));
+
+    return NextResponse.json({ items: orderedMovies });
+  } catch (error) {
+    console.error("Error retrieving watchlist:", error);
+    return NextResponse.json(
+      { error: "Failed to load watchlist" },
+      { status: 500 }
+    );
   }
 }
 
-// POST: Add or Remove movie
-export async function POST(request: Request) {
+// POST: Add or Remove a movie using { movieId } in request body
+export async function POST(request: NextRequest) {
   try {
-    const { userId, userEmail, movieId } = await request.json();
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!movieId || (!userId && !userEmail)) {
-      return NextResponse.json({ error: 'Missing movieId or user details' }, { status: 400 });
+    if (!user || !user.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { profile } = await getOrCreateProfile(userId, userEmail);
+    const body = await request.json();
+    const { movieId } = body;
 
+    if (!movieId) {
+      return NextResponse.json(
+        { error: "movieId is required" },
+        { status: 400 }
+      );
+    }
+
+    // 1. Safely resolve or link User by unique email (prevents unique constraint error)
+    const dbUser = await prisma.user.upsert({
+      where: { email: user.email },
+      update: {},
+      create: {
+        id: user.id,
+        email: user.email,
+      },
+    });
+
+    // 2. Ensure Profile exists for this dbUser
+    let userProfile = await prisma.profile.findFirst({
+      where: { userId: dbUser.id },
+    });
+
+    if (!userProfile) {
+      userProfile = await prisma.profile.create({
+        data: {
+          userId: dbUser.id,
+          name:
+            user.user_metadata?.full_name ||
+            user.email.split("@")[0] ||
+            "Default",
+        },
+      });
+    }
+
+    // 3. Toggle WatchListItem entry in database
     const existing = await prisma.watchListItem.findFirst({
       where: {
-        profileId: profile.id,
-        movieId,
+        profileId: userProfile.id,
+        movieId: movieId,
       },
     });
 
@@ -111,18 +126,21 @@ export async function POST(request: Request) {
       await prisma.watchListItem.delete({
         where: { id: existing.id },
       });
-      return NextResponse.json({ inMyList: false, message: 'Removed from watchlist' });
+      return NextResponse.json({ inList: false, message: "Removed from list" });
     } else {
       await prisma.watchListItem.create({
         data: {
-          profileId: profile.id,
-          movieId,
+          profileId: userProfile.id,
+          movieId: movieId,
         },
       });
-      return NextResponse.json({ inMyList: true, message: 'Added to watchlist' });
+      return NextResponse.json({ inList: true, message: "Added to list" });
     }
-  } catch (err: any) {
-    console.error('Watchlist POST error:', err);
-    return NextResponse.json({ error: err.message || 'Database error' }, { status: 500 });
+  } catch (error) {
+    console.error("Error toggling watchlist item:", error);
+    return NextResponse.json(
+      { error: "Failed to update watchlist" },
+      { status: 500 }
+    );
   }
 }
