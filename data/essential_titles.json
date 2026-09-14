@@ -1,0 +1,47 @@
+[
+  {
+    "canonicalTitle": "VDF",
+    "alternateTitles": ["V.D.F", "Village Defense Force"],
+    "releaseYear": null,
+    "importance": "essential",
+    "discoveryQueries": ["VDF Manipuri full movie", "VDF Manipuri film"],
+    "catalogueMatch": "99ca80bd-451a-449f-8ef7-ccf9161b3739",
+    "candidateSources": [],
+    "selectedSource": null,
+    "discovered": true,
+    "playable": true,
+    "embeddable": false,
+    "verificationStatus": "verified",
+    "lastAuditedAt": "2026-09-09T12:06:00.000Z"
+  },
+  {
+    "canonicalTitle": "Thasana",
+    "alternateTitles": ["Thasana Manipuri"],
+    "releaseYear": null,
+    "importance": "essential",
+    "discoveryQueries": ["Thasana Manipuri full movie", "Thasana Manipuri film"],
+    "catalogueMatch": null,
+    "candidateSources": [],
+    "selectedSource": null,
+    "discovered": false,
+    "playable": false,
+    "embeddable": false,
+    "verificationStatus": "needs-discovery",
+    "lastAuditedAt": "2026-09-09T12:06:00.000Z"
+  },
+  {
+    "canonicalTitle": "Yaiskul Pakhang Angouba",
+    "alternateTitles": ["Yaiskul Pakhang Anguba"],
+    "releaseYear": null,
+    "importance": "essential",
+    "discoveryQueries": ["Yaiskul Pakhang Angouba full movie", "Yaiskul Pakhang Anguba Manipuri"],
+    "catalogueMatch": null,
+    "candidateSources": [],
+    "selectedSource": null,
+    "discovered": false,
+    "playable": false,
+    "embeddable": false,
+    "verificationStatus": "needs-discovery",
+    "lastAuditedAt": null
+  }
+]

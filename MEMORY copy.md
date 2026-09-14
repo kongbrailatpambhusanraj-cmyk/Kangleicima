@@ -1,0 +1,4 @@
+- [Project Summary](memory/project-summary.md) — Core summary and state
+- [Import Report](IMPRORT_REPORT.md) — Import Report
+- [Thumbnail and Homepage Fix](memory/thumbnail-fix.md) — Fixed thumbnails and homepage rows
+- [Clean Architecture Layers](memory/clean-architecture-layers.md) — project

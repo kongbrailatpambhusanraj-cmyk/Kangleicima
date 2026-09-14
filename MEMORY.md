@@ -1,0 +1,5 @@
+- [Project Summary](memory/project-summary.md) — Core summary and state
+- [Import Report](IMPRORT_REPORT.md) — Import Report
+- [Thumbnail and Homepage Fix](memory/thumbnail-fix.md) — Fixed thumbnails and homepage rows
+- [Clean Architecture Layers](memory/clean-architecture-layers.md) — project
+- [Infinite Scroll & Paginated Movies](docs/PROJECT_MEMORY.md) — Created InfiniteMovieGrid, paginated browse API, fixed donation name to SUPPORT ME, Leela to Sumang Leela. 2026-09-12

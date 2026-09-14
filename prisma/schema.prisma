@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   String @default("user")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String?
+  createdAt DateTime  @default(now())
+  accounts  Account[]
+  profile   Profile[]
+  sessions  Session[]
+  userRole  UserRole?
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Profile {
+  id           String          @id @default(uuid())
+  name         String
+  userId       String
+  user         User            @relation(fields: [userId], references: [id])
+  watchHistory WatchHistory[]
+  watchList    WatchListItem[]
+}
+
+model WatchListItem {
+  id        String   @id @default(uuid())
+  profileId String
+  movieId   String
+  addedAt   DateTime @default(now())
+  profile   Profile  @relation(fields: [profileId], references: [id])
+}
+
+model WatchHistory {
+  id        String   @id @default(uuid())
+  profileId String
+  movieId   String
+  progress  Int      @default(0)
+  watchedAt DateTime @default(now())
+  profile   Profile  @relation(fields: [profileId], references: [id])
+}
+
+model Movie {
+  id                String   @id @default(uuid())
+  youtubeVideoId    String?  @unique
+  title             String
+  description       String?
+  thumbnail         String
+  sourceUrl         String?
+  sourceType        String?
+  genres            String[]
+  channelId         String?
+  channelTitle      String?
+  publishedAt       DateTime?
+  duration          Int?
+  viewCount         BigInt?
+  relevanceScore    Float?
+  isFullMovie       Boolean  @default(false)
+  isFeatured        Boolean  @default(false)
+  isPopular         Boolean  @default(false)
+  isDiscovered      Boolean  @default(false)
+  isRecentlyAdded   Boolean  @default(true)
+  isEssential       Boolean  @default(false)
+  availabilityStatus String   @default("UNKNOWN")
+  groupId           String?
+  createdAt         DateTime @default(now())
+  lastVerifiedAt    DateTime?
+  parts             MoviePart[]
+}
+
+model MoviePart {
+  id        String @id @default(uuid())
+  movieId   String
+  movie     Movie  @relation(fields: [movieId], references: [id])
+  partOrder Int
+  title     String
+  sourceUrl String
+  videoId   String?
+}
